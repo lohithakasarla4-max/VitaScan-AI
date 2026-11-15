@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VitaScan AI — Clinical Lab Report Interpreter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+
+    <!-- Top Navbar -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold text-lg">V</div>
+            <div>
+                <h1 class="text-lg font-bold text-slate-900 leading-tight">VitaScan AI</h1>
+                <p class="text-xs text-slate-500">Clinical Biomarker Interpreter & Health Insights</p>
+            </div>
+        </div>
+        <span class="text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1 rounded-full">
+            AI x Healthcare Edition
+        </span>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Input Column -->
+        <section class="lg:col-span-5 space-y-4">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold text-slate-900">Raw Lab Report Input</h2>
+                    <button id="loadSampleBtn" type="button" class="text-xs font-medium text-teal-600 hover:text-teal-700 underline">
+                        Load Sample Panel
+                    </button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">
+                    Paste unstructured blood test, metabolic, or lipid panel results below.
+                </p>
+                <textarea id="reportInput" rows="12" 
+                    class="w-full p-3.5 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                    placeholder="e.g. Hemoglobin A1c: 6.1% (Ref: 4.0 - 5.6%)..."></textarea>
+
+                <button id="analyzeBtn" type="button"
+                    class="mt-4 w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2 shadow-sm">
+                    <span>Analyze Biomarkers</span>
+                </button>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
+                <strong>Medical Disclaimer:</strong> VitaScan AI translates medical lab terminology for educational purposes only and does not provide medical diagnoses. Always consult a licensed physician.
+            </div>
+        </section>
+
+        <!-- Right Results Column -->
+        <section class="lg:col-span-7 space-y-6">
+            
+            <!-- Placeholder State -->
+            <div id="emptyState" class="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center">
+                <div class="w-12 h-12 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center mx-auto mb-3 font-bold text-xl">+</div>
+                <h3 class="font-semibold text-slate-800 mb-1">Ready to Interpret Your Lab Results</h3>
+                <p class="text-sm text-slate-500 max-w-md mx-auto">
+                    Click <strong>Load Sample Panel</strong> on the left and hit <strong>Analyze Biomarkers</strong> to generate visual reference charts and physician questions.
+                </p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="hidden bg-white p-12 rounded-2xl border border-slate-200 text-center">
+                <div class="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-3"></div>
+                <p class="text-sm font-medium text-slate-700">Extracting biomarkers & comparing clinical ranges...</p>
+            </div>
+
+            <!-- Results Dashboard -->
+            <div id="resultsDashboard" class="hidden space-y-6">
+                
+                <!-- Summary + Health Score Card -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div class="space-y-1">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-teal-600">Clinical Overview</span>
+                        <p id="overallSummary" class="text-sm text-slate-700 leading-relaxed"></p>
+                    </div>
+                    <div class="shrink-0 bg-slate-900 text-white px-5 py-3 rounded-xl text-center">
+                        <div class="text-xs text-slate-400 uppercase">Wellness Index</div>
+                        <div id="healthScore" class="text-2xl font-bold text-teal-400">--</div>
+                    </div>
+                </div>
+
+                <!-- Visual Biomarker Chart -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="font-semibold text-slate-900 mb-1">Biomarker vs. Upper Reference Limit</h3>
+                    <p class="text-xs text-slate-500 mb-4">Visualizing measured values relative to clinical reference thresholds</p>
+                    <div class="h-64">
+                        <canvas id="biomarkerChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Detailed Biomarker Cards -->
+                <div>
+                    <h3 class="font-semibold text-slate-900 mb-3">Detailed Biomarker Breakdown</h3>
+                    <div id="biomarkerGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                </div>
+
+                <!-- Questions for Doctor & Lifestyle -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <h4 class="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-teal-600"></span> Questions for Your Doctor
+                        </h4>
+                        <ul id="doctorQuestions" class="space-y-2.5 text-xs text-slate-700 list-disc pl-4"></ul>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <h4 class="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-indigo-600"></span> Actionable Next Steps
+                        </h4>
+                        <ul id="lifestyleTips" class="space-y-2.5 text-xs text-slate-700 list-disc pl-4"></ul>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- Safe hidden container for Jinja sample report text -->
+    <div id="sampleData" class="hidden">{{ sample_report }}</div>
+
+    <script>
+        const sampleReportText = document.getElementById('sampleData').textContent;
+        let chartInstance = null;
+
+        document.getElementById('loadSampleBtn').addEventListener('click', () => {
+            document.getElementById('reportInput').value = sampleReportText;
+        });
+
+        document.getElementById('analyzeBtn').addEventListener('click', async () => {
+            const text = document.getElementById('reportInput').value.trim();
+            if (!text) {
+                alert("Please enter a lab report or click 'Load Sample Panel'.");
+                return;
+            }
+
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('resultsDashboard').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+
+            try {
+                const res = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ report_text: text })
+                });
+                const data = await res.json();
+                renderDashboard(data);
+            } catch (err) {
+                alert("Error analyzing report. Please try again.");
+            } finally {
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        });
+
+        function renderDashboard(data) {
+            document.getElementById('overallSummary').textContent = data.overall_summary;
+            document.getElementById('healthScore').textContent = `${data.health_score}/100`;
+
+            const grid = document.getElementById('biomarkerGrid');
+            grid.innerHTML = '';
+
+            data.biomarkers.forEach(item => {
+                let badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                if (item.status === "Borderline") badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+                if (item.status === "Out of Range") badgeClass = "bg-rose-50 text-rose-700 border-rose-200";
+
+                grid.innerHTML += `
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <h4 class="font-bold text-slate-900 text-sm">${item.name}</h4>
+                                <span class="text-xs text-slate-400">Ref: ${item.ref_display}</span>
+                            </div>
+                            <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full border ${badgeClass}">
+                                ${item.status}
+                            </span>
+                        </div>
+                        <div class="text-xl font-bold text-slate-800">
+                            ${item.value} <span class="text-xs font-normal text-slate-500">${item.unit}</span>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">${item.explanation}</p>
+                    </div>
+                `;
+            });
+
+            const qList = document.getElementById('doctorQuestions');
+            qList.innerHTML = data.doctor_questions.map(q => `<li>${q}</li>`).join('');
+
+            const tList = document.getElementById('lifestyleTips');
+            tList.innerHTML = data.lifestyle_tips.map(t => `<li>${t}</li>`).join('');
+
+            renderChart(data.biomarkers);
+            document.getElementById('resultsDashboard').classList.remove('hidden');
+        }
+
+        function renderChart(biomarkers) {
+            const ctx = document.getElementById('biomarkerChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            const labels = biomarkers.map(b => b.name);
+            const values = biomarkers.map(b => b.value);
+            const maxRefs = biomarkers.map(b => b.ref_max);
+            const colors = biomarkers.map(b => {
+                if (b.status === 'Out of Range') return 'rgba(225, 29, 72, 0.8)';
+                if (b.status === 'Borderline') return 'rgba(217, 119, 6, 0.8)';
+                return 'rgba(13, 148, 136, 0.8)';
+            });
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Your Result',
+                            data: values,
+                            backgroundColor: colors,
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Upper Reference Limit',
+                            data: maxRefs,
+                            backgroundColor: 'rgba(148, 163, 184, 0.35)',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
